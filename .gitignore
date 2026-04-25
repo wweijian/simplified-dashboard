@@ -1,0 +1,9 @@
+# All dot files
+.*
+!.gitignore
+
+# planning files
+docs/
+
+*.md
+!README.md

@@ -1,22 +1,57 @@
-package ui 
+package ui
 
 import (
-	bbt "github.com/charmbracelet/bubbletea"
+	calendar 	"simplified-dashboard/internal/calendar"
+	finance		"simplified-dashboard/internal/finance"
+	tasks		"simplified-dashboard/internal/tasks"
+	habits		"simplified-dashboard/internal/habits"
+	
+	bbt			"github.com/charmbracelet/bubbletea"
 )
 
-type Model struct {}
-
-func New() Model { return Model{} }
-
-func (m Model) Init() bbt.Cmd { return nil }
-
-func (m Model) Update(msg bbt.Msg) (bbt.Model, bbt.Cmd) {
-	if key, ok := msg.(bbt.KeyMsg); ok && key.String() == "q" {
-		return m, bbt.Quit
-	}
-	return m, nil
+type Panel interface {
+	SummaryView(width, height int, focused bool) string
+	ExpandedView(width, height int) string
 }
 
-func (m Model) View () string {
-	return "dashboard goes here, press q to exit"
+type Model struct {
+	width		int
+	height		int
+	activePanel	int
+	calendar	Panel
+	tasks		Panel
+	finance		Panel
+	habits		Panel
+}
+
+func New() Model { 
+	return Model{
+		activePanel:	int(Calendar),
+		calendar:		calendar.New(),
+		tasks:			tasks.New(),
+		finance:		finance.New(),
+		habits:			habits.New(),
+	}
+}
+
+func (model Model) Init() bbt.Cmd { return nil }
+
+func (model Model) Update(msg bbt.Msg) (bbt.Model, bbt.Cmd) {
+	switch msg := msg.(type) {
+	case bbt.WindowSizeMsg:
+		model.width = msg.Width
+		model.height = msg.Height
+	case bbt.KeyMsg:
+		if handler, ok := keyBindings[msg.String()]; ok {
+			return handler(model);
+		}
+	}
+	return model, nil
+}
+
+func (model Model) View () string {
+	if model.width == 0 {
+		return ""
+	}
+	return renderLayout(model)
 }

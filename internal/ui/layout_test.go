@@ -4,9 +4,9 @@ import "testing"
 
 func TestPanelWidths(t *testing.T) {
 	tests := []struct {
-		total		int
-		wantLeft	int
-		wantRight	int
+		total     int
+		wantLeft  int
+		wantRight int
 	}{
 		{100, 40, 59},
 		{120, 48, 71},

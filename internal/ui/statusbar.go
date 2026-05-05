@@ -5,9 +5,9 @@ import (
 )
 
 func renderStatusBar(model Model) string {
-	hints := "1-4: jump  ↑↓: navigate  →/tab: right panel  ←/esc: back  q: quit  ?: help"
+	hints := "1-4: jump  tab/shift+tab: switch panel  up/down: select task  a: add task  space: toggle  d: delete  q: quit"
+
 	return lipgloss.NewStyle().
 		Width(model.width).
-		Foreground(color.dim).
 		Render(hints)
 }

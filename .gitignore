@@ -5,5 +5,9 @@
 # planning files
 docs/
 
+# markdown files
 *.md
 !README.md
+
+# executables
+simplified-dashboard

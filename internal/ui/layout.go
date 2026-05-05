@@ -7,15 +7,15 @@ import (
 )
 
 type theme struct {
-	dim    lipgloss.Color
-	active lipgloss.Color
-	accent lipgloss.Color
+	text   lipgloss.TerminalColor
+	accent lipgloss.TerminalColor
+	danger lipgloss.TerminalColor
 }
 
 var color = theme{
-	dim:    lipgloss.Color("#343538"),
-	active: lipgloss.Color("#1e2040"),
-	accent: lipgloss.Color("#7aa2f7"),
+	text:   lipgloss.NoColor{},
+	accent: lipgloss.Color("6"),
+	danger: lipgloss.Color("1"),
 }
 
 var panelLabels = []string{
@@ -43,5 +43,36 @@ func renderLayout(model Model) string {
 	right := renderRightPanel(model, rightWidth, contentHeight)
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, left, divider, right)
-	return lipgloss.JoinVertical(lipgloss.Left, row, renderStatusBar(model))
+	layout := lipgloss.JoinVertical(lipgloss.Left, row, renderStatusBar(model))
+	if model.mode == ModeAddTask {
+		return overlayCentered(layout, model.addTaskForm.View(model.width), model.width, model.height)
+	}
+	return layout
+}
+
+func overlayCentered(base, modal string, width, height int) string {
+	baseLines := strings.Split(base, "\n")
+	modalLines := strings.Split(modal, "\n")
+
+	for len(baseLines) < height {
+		baseLines = append(baseLines, "")
+	}
+
+	top := max((height-len(modalLines))/2, 0)
+
+	for i, modalLine := range modalLines {
+		lineIndex := top + i
+		if lineIndex >= len(baseLines) {
+			break
+		}
+		baseLines[lineIndex] = lipgloss.Place(
+			width,
+			1,
+			lipgloss.Center,
+			lipgloss.Center,
+			modalLine,
+		)
+	}
+
+	return strings.Join(baseLines, "\n")
 }

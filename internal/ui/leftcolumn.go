@@ -22,21 +22,18 @@ func renderLeftColumn(model Model, width, totalHeight int) string {
 }
 
 func renderLeftPanel(model Model, panelNum, width, height int) string {
-	bg := lipgloss.NewStyle()
-
 	isActive := model.activePanel == panelNum
-	if isActive {
-		bg = bg.Background(color.active)
-	}
 
 	labelLen := len(panelLabels[panelNum-1])
 	dashCount := width - labelLen
 	if dashCount < 0 {
 		dashCount = 0
 	}
-	title := bg.Width(width).
-		Foreground(color.accent).
-		Render(panelLabels[panelNum-1] + strings.Repeat("─", dashCount))
+	titleStyle := lipgloss.NewStyle().Width(width)
+	if isActive {
+		titleStyle = titleStyle.Foreground(color.accent).Bold(true)
+	}
+	title := titleStyle.Render(panelLabels[panelNum-1] + strings.Repeat("─", dashCount))
 
 	var content string
 	bodyHeight := height - 1
@@ -51,6 +48,6 @@ func renderLeftPanel(model Model, panelNum, width, height int) string {
 		content = model.habits.SummaryView(width, bodyHeight, isActive)
 	}
 
-	body := bg.Width(width).Height(bodyHeight).Render(content)
+	body := lipgloss.NewStyle().Width(width).Height(bodyHeight).Render(content)
 	return lipgloss.JoinVertical(lipgloss.Left, title, body)
 }

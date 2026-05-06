@@ -75,7 +75,7 @@ func taskCount(t *testing.T, sqlDB *sql.DB) int {
 func TestAOpensAddTaskModeWithoutCreatingTask(t *testing.T) {
 	database, sqlDB := openTestDatabase(t)
 	model := New(database)
-	model.activePanel = int(Finance)
+	model.activePanel = int(Tasks)
 
 	model = pressRune(model, "a")
 
@@ -88,9 +88,26 @@ func TestAOpensAddTaskModeWithoutCreatingTask(t *testing.T) {
 	}
 }
 
+func TestAIgnoredOutsideTaskPanel(t *testing.T) {
+	database, sqlDB := openTestDatabase(t)
+	model := New(database)
+	model.activePanel = int(Finance)
+
+	model = pressRune(model, "a")
+
+	if model.mode != ModeNormal {
+		t.Fatalf("expected normal mode outside task panel, got %d", model.mode)
+	}
+
+	if taskCount(t, sqlDB) != 0 {
+		t.Fatalf("expected no placeholder task, got %d", taskCount(t, sqlDB))
+	}
+}
+
 func TestEscCancelsAddTaskModeWithoutCreatingTask(t *testing.T) {
 	database, sqlDB := openTestDatabase(t)
 	model := New(database)
+	model.activePanel = int(Tasks)
 
 	model = pressRune(model, "a")
 	model = pressType(model, bbt.KeyEsc)
@@ -107,6 +124,7 @@ func TestEscCancelsAddTaskModeWithoutCreatingTask(t *testing.T) {
 func TestAddTaskModeRendersPopup(t *testing.T) {
 	database, _ := openTestDatabase(t)
 	model := New(database)
+	model.activePanel = int(Tasks)
 	model = resize(model, 80, 24)
 
 	model = pressRune(model, "a")
@@ -123,7 +141,7 @@ func TestAddTaskModeRendersPopup(t *testing.T) {
 func TestAddTaskPopupClearsDashboardTextBehindModalRows(t *testing.T) {
 	database, _ := openTestDatabase(t)
 	model := New(database)
-	model.activePanel = int(Finance)
+	model.activePanel = int(Tasks)
 	model = resize(model, 100, 24)
 
 	model = pressRune(model, "a")
@@ -139,6 +157,7 @@ func TestAddTaskPopupClearsDashboardTextBehindModalRows(t *testing.T) {
 func TestValidAddTaskSubmitCreatesTask(t *testing.T) {
 	database, sqlDB := openTestDatabase(t)
 	model := New(database)
+	model.activePanel = int(Tasks)
 
 	model = pressRune(model, "a")
 	model = pressRune(model, "Pay bill")
@@ -172,6 +191,7 @@ func TestValidAddTaskSubmitCreatesTask(t *testing.T) {
 func TestEmptyTitleDoesNotSubmit(t *testing.T) {
 	database, sqlDB := openTestDatabase(t)
 	model := New(database)
+	model.activePanel = int(Tasks)
 
 	model = pressRune(model, "a")
 	model = pressType(model, bbt.KeyEnter)
@@ -188,6 +208,7 @@ func TestEmptyTitleDoesNotSubmit(t *testing.T) {
 func TestDueDaysRejectsNonNumericInput(t *testing.T) {
 	database, sqlDB := openTestDatabase(t)
 	model := New(database)
+	model.activePanel = int(Tasks)
 
 	model = pressRune(model, "a")
 	model = pressRune(model, "Pay bill")
@@ -211,6 +232,7 @@ func TestDueDaysRejectsNonNumericInput(t *testing.T) {
 func TestLongTitleDoesNotSubmit(t *testing.T) {
 	database, sqlDB := openTestDatabase(t)
 	model := New(database)
+	model.activePanel = int(Tasks)
 
 	model = pressRune(model, "a")
 	model.addTaskForm.title = strings.Repeat("a", maxTaskTitleLength+1)
@@ -229,6 +251,7 @@ func TestLongTitleDoesNotSubmit(t *testing.T) {
 func TestDueDateBeyondOneYearDoesNotSubmit(t *testing.T) {
 	database, sqlDB := openTestDatabase(t)
 	model := New(database)
+	model.activePanel = int(Tasks)
 
 	model = pressRune(model, "a")
 	model = pressRune(model, "Pay bill")
@@ -259,5 +282,87 @@ func TestTaskPanelKeysDoNotRunWhileAddTaskModeIsOpen(t *testing.T) {
 
 	if taskCount(t, sqlDB) != 1 {
 		t.Fatalf("expected task key to be blocked by modal, got %d tasks", taskCount(t, sqlDB))
+	}
+}
+
+func TestEOpensEditTaskMode(t *testing.T) {
+	database, sqlDB := openTestDatabase(t)
+	if _, err := sqlDB.Exec(`INSERT INTO tasks (title, due_date, priority, completed) VALUES ('Edit me', '2026-05-06', 1, 0)`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+
+	model := New(database)
+	model.activePanel = int(Tasks)
+	model = resize(model, 80, 24)
+
+	model = pressRune(model, "e")
+
+	if model.mode != ModeEditTask {
+		t.Fatalf("expected edit-task mode, got %d", model.mode)
+	}
+	if model.editingTaskID == 0 {
+		t.Fatalf("expected editing task id to be set")
+	}
+	if !strings.Contains(model.View(), "Edit task") {
+		t.Fatalf("expected edit-task popup, got:\n%s", model.View())
+	}
+}
+
+func TestEditTaskSubmitUpdatesTask(t *testing.T) {
+	database, sqlDB := openTestDatabase(t)
+	if _, err := sqlDB.Exec(`INSERT INTO tasks (title, due_date, priority, completed) VALUES ('Old title', '2026-05-06', 1, 0)`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+
+	model := New(database)
+	model.activePanel = int(Tasks)
+	model = pressRune(model, "e")
+	model.addTaskForm.title = "New title"
+	model.addTaskForm.description = "Updated description"
+	model.addTaskForm.dueDays = "5"
+	model.addTaskForm.priority = 2
+	model = pressType(model, bbt.KeyEnter)
+
+	if model.mode != ModeNormal {
+		t.Fatalf("expected normal mode after edit submit, got %d", model.mode)
+	}
+
+	var title string
+	var description string
+	var dueDate string
+	var priority int
+	if err := sqlDB.QueryRow(`SELECT title, description, due_date, priority FROM tasks`).Scan(&title, &description, &dueDate, &priority); err != nil {
+		t.Fatalf("query updated task: %v", err)
+	}
+
+	wantDueDate := time.Now().AddDate(0, 0, 5).Format("2006-01-02")
+	if title != "New title" || description != "Updated description" || dueDate != wantDueDate || priority != 2 {
+		t.Fatalf("updated task = (%q, %q, %q, %d), want (%q, %q, %q, %d)",
+			title, description, dueDate, priority, "New title", "Updated description", wantDueDate, 2)
+	}
+}
+
+func TestEscCancelsEditTaskModeWithoutUpdatingTask(t *testing.T) {
+	database, sqlDB := openTestDatabase(t)
+	if _, err := sqlDB.Exec(`INSERT INTO tasks (title, due_date, priority, completed) VALUES ('Keep title', '2026-05-06', 1, 0)`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+
+	model := New(database)
+	model.activePanel = int(Tasks)
+	model = pressRune(model, "e")
+	model.addTaskForm.title = "Discard me"
+	model = pressType(model, bbt.KeyEsc)
+
+	if model.mode != ModeNormal {
+		t.Fatalf("expected normal mode after edit cancel, got %d", model.mode)
+	}
+
+	var title string
+	if err := sqlDB.QueryRow(`SELECT title FROM tasks`).Scan(&title); err != nil {
+		t.Fatalf("query task title: %v", err)
+	}
+	if title != "Keep title" {
+		t.Fatalf("expected title to be unchanged, got %q", title)
 	}
 }

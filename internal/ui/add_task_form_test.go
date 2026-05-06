@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
+
+	"simplified-dashboard/internal/tasks"
 )
 
 func TestAddTaskFormFieldsDoNotWrapBorders(t *testing.T) {
@@ -163,5 +166,35 @@ func TestAddTaskFormAcceptsDueDateAtOneYear(t *testing.T) {
 	_, _, ok := form.Submit(time.Now())
 	if !ok {
 		t.Fatalf("expected due date at one year to submit")
+	}
+}
+
+func TestAddTaskFormAcceptsNegativeDueDays(t *testing.T) {
+	now := time.Date(2026, 5, 6, 12, 0, 0, 0, time.Local)
+	form := newAddTaskForm()
+	form.title = "Overdue"
+	form.dueDays = "-2"
+
+	_, input, ok := form.Submit(now)
+	if !ok {
+		t.Fatalf("expected negative due days to submit")
+	}
+
+	if !input.DueDate.Valid || input.DueDate.String != "2026-05-04" {
+		t.Fatalf("expected past due date, got %#v", input.DueDate)
+	}
+}
+
+func TestEditTaskFormPrefillsDueDays(t *testing.T) {
+	now := time.Date(2026, 5, 6, 12, 0, 0, 0, time.Local)
+	form := newEditTaskForm(tasks.Task{
+		Title:       "Existing",
+		Description: sql.NullString{String: "Notes", Valid: true},
+		DueDate:     sql.NullString{String: "2026-05-04", Valid: true},
+		Priority:    2,
+	}, now)
+
+	if form.title != "Existing" || form.description != "Notes" || form.dueDays != "-2" || form.priority != 2 {
+		t.Fatalf("unexpected edit form values: %#v", form)
 	}
 }

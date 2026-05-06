@@ -24,6 +24,8 @@ type CreateTaskInput struct {
 	Priority    int
 }
 
+type UpdateTaskInput = CreateTaskInput
+
 type Store struct {
 	db *db.DB
 }
@@ -131,6 +133,18 @@ func (store Store) UpdatePriority(id int64, priority int) error {
 	`, priority, id)
 	if err != nil {
 		return fmt.Errorf("failed to update task priority: %w", err)
+	}
+	return nil
+}
+
+func (store Store) Update(id int64, input UpdateTaskInput) error {
+	_, err := store.db.Exec(`
+		UPDATE tasks
+		SET title = ?, description = ?, due_date = ?, priority = ?
+		WHERE id = ?
+	`, input.Title, input.Description, input.DueDate, input.Priority, id)
+	if err != nil {
+		return fmt.Errorf("failed to update task: %w", err)
 	}
 	return nil
 }

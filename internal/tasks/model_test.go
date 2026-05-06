@@ -157,3 +157,127 @@ func TestModelSortsByPriority(t *testing.T) {
 		t.Fatalf("expected priority sort to put high priority first, got %q", model.tasks[0].Title)
 	}
 }
+
+func TestModelCyclesFilters(t *testing.T) {
+	store := openTestStore(t)
+	model := New(store)
+
+	model = model.Update("]")
+	if model.filterMode != FilterToday {
+		t.Fatalf("expected today filter, got %d", model.filterMode)
+	}
+
+	model = model.Update("]")
+	if model.filterMode != FilterOverdue {
+		t.Fatalf("expected overdue filter, got %d", model.filterMode)
+	}
+
+	model = model.Update("]")
+	if model.filterMode != FilterCompleted {
+		t.Fatalf("expected completed filter, got %d", model.filterMode)
+	}
+
+	model = model.Update("]")
+	if model.filterMode != FilterAll {
+		t.Fatalf("expected all filter, got %d", model.filterMode)
+	}
+
+	model = model.Update("[")
+	if model.filterMode != FilterCompleted {
+		t.Fatalf("expected previous filter to wrap to completed, got %d", model.filterMode)
+	}
+}
+
+func TestModelFiltersTodayTasks(t *testing.T) {
+	withCurrentDate(t, "2026-05-06")
+	store := openTestStore(t)
+
+	mustCreateTask(t, store, CreateTaskInput{
+		Title:    "Today",
+		DueDate:  sql.NullString{String: "2026-05-06", Valid: true},
+		Priority: 1,
+	})
+	mustCreateTask(t, store, CreateTaskInput{
+		Title:    "Tomorrow",
+		DueDate:  sql.NullString{String: "2026-05-07", Valid: true},
+		Priority: 1,
+	})
+
+	model := New(store)
+	model = model.Update("]")
+
+	if len(model.tasks) != 1 || model.tasks[0].Title != "Today" {
+		t.Fatalf("expected only today's task, got %#v", model.tasks)
+	}
+}
+
+func TestModelFiltersOverdueTasks(t *testing.T) {
+	withCurrentDate(t, "2026-05-06")
+	store := openTestStore(t)
+
+	mustCreateTask(t, store, CreateTaskInput{
+		Title:    "Overdue",
+		DueDate:  sql.NullString{String: "2026-05-05", Valid: true},
+		Priority: 1,
+	})
+	mustCreateTask(t, store, CreateTaskInput{
+		Title:    "Today",
+		DueDate:  sql.NullString{String: "2026-05-06", Valid: true},
+		Priority: 1,
+	})
+
+	model := New(store)
+	model = model.Update("]")
+	model = model.Update("]")
+
+	if len(model.tasks) != 1 || model.tasks[0].Title != "Overdue" {
+		t.Fatalf("expected only overdue task, got %#v", model.tasks)
+	}
+}
+
+func TestModelFiltersCompletedTasks(t *testing.T) {
+	store := openTestStore(t)
+
+	seedTask(t, store, "Incomplete")
+	seedTask(t, store, "Complete")
+
+	tasks := mustListTasks(t, store)
+	for _, task := range tasks {
+		if task.Title == "Complete" {
+			if err := store.ToggleCompleted(task.ID); err != nil {
+				t.Fatalf("complete task: %v", err)
+			}
+			break
+		}
+	}
+
+	model := New(store)
+	model = model.Update("[")
+
+	if len(model.tasks) != 1 || model.tasks[0].Title != "Complete" {
+		t.Fatalf("expected only completed task, got %#v", model.tasks)
+	}
+}
+
+func TestModelUpdateTaskPreservesSelection(t *testing.T) {
+	store := openTestStore(t)
+
+	seedTask(t, store, "First")
+	seedTask(t, store, "Second")
+
+	model := New(store)
+	model = model.Update("down")
+	selectedTask := model.selectedTask()
+
+	model = model.UpdateTask(selectedTask.ID, UpdateTaskInput{
+		Title:    "Second edited",
+		Priority: 2,
+	})
+
+	if model.selectedTask().ID != selectedTask.ID {
+		t.Fatalf("expected edited task to remain selected")
+	}
+	if model.selectedTask().Title != "Second edited" {
+		t.Fatalf("expected edited task title, got %q", model.selectedTask().Title)
+	}
+}

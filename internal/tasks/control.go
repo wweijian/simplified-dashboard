@@ -1,8 +1,13 @@
 package tasks
 
 func (model Model) Update(key string) Model {
-	if key == "s" {
+	switch key {
+	case "s":
 		return model.toggleSortMode()
+	case "[":
+		return model.cycleFilter(-1)
+	case "]":
+		return model.cycleFilter(1)
 	}
 
 	if len(model.tasks) == 0 {
@@ -22,6 +27,13 @@ func (model Model) Update(key string) Model {
 		return model.cycleSelectedTaskPriority()
 	}
 
+	return model
+}
+
+func (model Model) cycleFilter(distance int) Model {
+	filterCount := int(FilterCompleted) + 1
+	model.filterMode = FilterMode((int(model.filterMode) + distance + filterCount) % filterCount)
+	model.applyFilter()
 	return model
 }
 

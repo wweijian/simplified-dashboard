@@ -22,18 +22,20 @@ type ViewMode int
 const (
 	ModeNormal ViewMode = iota
 	ModeAddTask
+	ModeEditTask
 )
 
 type Model struct {
-	width       int
-	height      int
-	activePanel int
-	mode        ViewMode
-	addTaskForm addTaskForm
-	calendar    Panel
-	tasks       tasks.Model
-	finance     Panel
-	habits      Panel
+	width         int
+	height        int
+	activePanel   int
+	mode          ViewMode
+	addTaskForm   addTaskForm
+	editingTaskID int64
+	calendar      Panel
+	tasks         tasks.Model
+	finance       Panel
+	habits        Panel
 }
 
 func New(database *db.DB) Model {
@@ -58,18 +60,24 @@ func (model Model) Update(msg bbt.Msg) (bbt.Model, bbt.Cmd) {
 	case bbt.KeyMsg:
 		key := msg.String()
 
-		if model.mode == ModeAddTask {
+		if model.mode == ModeAddTask || model.mode == ModeEditTask {
 			switch key {
 			case "esc":
 				model.mode = ModeNormal
 				model.addTaskForm = newAddTaskForm()
+				model.editingTaskID = 0
 			case "enter":
 				form, input, ok := model.addTaskForm.Submit(time.Now())
 				model.addTaskForm = form
 				if ok {
-					model.tasks = model.tasks.Create(input)
+					if model.mode == ModeEditTask {
+						model.tasks = model.tasks.UpdateTask(model.editingTaskID, input)
+					} else {
+						model.tasks = model.tasks.Create(input)
+					}
 					model.mode = ModeNormal
 					model.addTaskForm = newAddTaskForm()
+					model.editingTaskID = 0
 				}
 			default:
 				model.addTaskForm = model.addTaskForm.Update(msg)
@@ -78,8 +86,19 @@ func (model Model) Update(msg bbt.Msg) (bbt.Model, bbt.Cmd) {
 		}
 
 		if key == "a" {
-			model.mode = ModeAddTask
-			model.addTaskForm = newAddTaskForm()
+			if model.activePanel == int(Tasks) {
+				model.mode = ModeAddTask
+				model.addTaskForm = newAddTaskForm()
+			}
+			return model, nil
+		}
+
+		if key == "e" && model.activePanel == int(Tasks) {
+			if task, ok := model.tasks.SelectedTask(); ok {
+				model.mode = ModeEditTask
+				model.editingTaskID = task.ID
+				model.addTaskForm = newEditTaskForm(task, time.Now())
+			}
 			return model, nil
 		}
 

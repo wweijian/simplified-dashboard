@@ -17,16 +17,33 @@ func (model Model) SummaryView(width, height int, focused bool) string {
 		return "error loading tasks"
 	}
 
-	if len(model.tasks) == 0 {
+	tasks := model.summaryTasks()
+	if len(tasks) == 0 {
 		return "No tasks"
 	}
 
 	var lines []string
-	for _, task := range model.tasks {
-		if task.Completed {
+	overdueCount := 0
+	for _, task := range tasks {
+		days, hasDueDate := taskDaysUntilDue(task)
+		if task.Completed || !hasDueDate {
 			continue
 		}
 
+		if days < 0 {
+			overdueCount++
+		}
+	}
+
+	if overdueCount > 0 {
+		lines = append(lines, fmt.Sprintf("%d overdue", overdueCount))
+	}
+
+	for _, task := range tasks {
+		days, hasDueDate := taskDaysUntilDue(task)
+		if task.Completed || !hasDueDate || days != 0 {
+			continue
+		}
 		lines = append(lines, taskRow("", task))
 
 		if len(lines) >= height {
@@ -35,6 +52,9 @@ func (model Model) SummaryView(width, height int, focused bool) string {
 	}
 
 	if len(lines) == 0 {
+		if hasIncompleteTask(tasks) {
+			return "No tasks due today"
+		}
 		return "All done"
 	}
 
@@ -47,10 +67,16 @@ func (model Model) ExpandedView(width, height int) string {
 	}
 
 	if len(model.tasks) == 0 {
+		if len(model.allTasks) > 0 {
+			return fmt.Sprintf("Filter: %s  Sort: %s\n\nNo tasks in this filter", model.FilterLabel(), model.SortLabel())
+		}
 		return "No tasks yet"
 	}
 
-	var lines []string
+	lines := []string{
+		fmt.Sprintf("Filter: %s  Sort: %s", model.FilterLabel(), model.SortLabel()),
+		"",
+	}
 	for i, task := range model.tasks {
 		cursor := "  "
 		if i == model.selected {
@@ -59,6 +85,22 @@ func (model Model) ExpandedView(width, height int) string {
 		lines = append(lines, taskRow(cursor, task))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (model Model) summaryTasks() []Task {
+	if len(model.allTasks) > 0 {
+		return model.allTasks
+	}
+	return model.tasks
+}
+
+func hasIncompleteTask(tasks []Task) bool {
+	for _, task := range tasks {
+		if !task.Completed {
+			return true
+		}
+	}
+	return false
 }
 
 func taskRow(cursor string, task Task) string {
@@ -87,16 +129,12 @@ func priorityLabel(priority int) string {
 }
 
 func dueDateText(task Task) string {
-	if !task.DueDate.Valid || task.DueDate.String == "" {
+	days, ok := taskDaysUntilDue(task)
+	if !ok {
 		return ""
 	}
 
-	dueDate, err := time.ParseInLocation("2006-01-02", task.DueDate.String, time.Local)
-	if err != nil {
-		return ""
-	}
-
-	return relativeDueDate(daysUntilDue(dueDate))
+	return relativeDueDate(days)
 }
 
 func daysUntilDue(dueDate time.Time) int {

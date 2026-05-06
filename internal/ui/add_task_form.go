@@ -46,6 +46,16 @@ func newAddTaskForm() addTaskForm {
 	}
 }
 
+func newEditTaskForm(task tasks.Task, now time.Time) addTaskForm {
+	form := addTaskForm{
+		title:       task.Title,
+		description: nullableStringValue(task.Description),
+		dueDays:     dueDaysFromDate(task.DueDate, now),
+		priority:    task.Priority,
+	}
+	return form
+}
+
 func (form addTaskForm) Update(msg bbt.KeyMsg) addTaskForm {
 	form.errorText = ""
 
@@ -101,8 +111,8 @@ func (form addTaskForm) Submit(now time.Time) (addTaskForm, tasks.CreateTaskInpu
 	}
 
 	days, err := strconv.Atoi(form.dueDays)
-	if err != nil || days < 0 {
-		form.errorText = "Due date must be a non-negative number of days"
+	if err != nil {
+		form.errorText = "Due date must be a number of days"
 		return form, tasks.CreateTaskInput{}, false
 	}
 	if days > maxTaskDueDays {
@@ -121,11 +131,15 @@ func (form addTaskForm) Submit(now time.Time) (addTaskForm, tasks.CreateTaskInpu
 }
 
 func (form addTaskForm) View(width int) string {
+	return form.ViewWithTitle(width, "Add task")
+}
+
+func (form addTaskForm) ViewWithTitle(width int, title string) string {
 	modalWidth := addTaskModalWidth(width)
 	fieldWidth := max(modalWidth-12, 12)
 
 	lines := []string{
-		formTitleStyle().Render("Add task"),
+		formTitleStyle().Render(title),
 		fieldLabel("Title", form.field == addTaskTitle),
 		inputField(form.title, fieldWidth, form.field == addTaskTitle),
 		fieldLabel("Due in days", form.field == addTaskDueDays),
@@ -332,10 +346,10 @@ func (form addTaskForm) appendRune(r rune) addTaskForm {
 		}
 		form.description += string(r)
 	case addTaskDueDays:
-		if unicode.IsDigit(r) {
+		if unicode.IsDigit(r) || (r == '-' && form.dueDays == "") {
 			form.dueDays += string(r)
 		} else {
-			form.errorText = "Due date accepts digits only"
+			form.errorText = "Due date accepts numbers only"
 		}
 	case addTaskPriority:
 		switch r {
@@ -391,4 +405,25 @@ func titleLengthError() string {
 
 func descriptionLengthError() string {
 	return fmt.Sprintf("Description must be %d characters or fewer", maxTaskDescriptionChars)
+}
+
+func nullableStringValue(value sql.NullString) string {
+	if !value.Valid {
+		return ""
+	}
+	return value.String
+}
+
+func dueDaysFromDate(value sql.NullString, now time.Time) string {
+	if !value.Valid || value.String == "" {
+		return ""
+	}
+
+	dueDate, err := time.ParseInLocation("2006-01-02", value.String, time.Local)
+	if err != nil {
+		return ""
+	}
+
+	today := now.In(time.Local).Truncate(24 * time.Hour)
+	return strconv.Itoa(int(dueDate.Sub(today).Hours() / 24))
 }

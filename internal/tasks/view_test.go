@@ -54,6 +54,59 @@ func TestSummaryViewUsesTaskRowShape(t *testing.T) {
 	}
 }
 
+func TestSummaryViewShowsOnlyTodayIncompleteTasks(t *testing.T) {
+	withCurrentDate(t, "2026-05-05")
+
+	model := Model{
+		allTasks: []Task{
+			{
+				Title:    "Today",
+				Priority: 1,
+				DueDate:  sql.NullString{String: "2026-05-05", Valid: true},
+			},
+			{
+				Title:    "Future",
+				Priority: 1,
+				DueDate:  sql.NullString{String: "2026-05-06", Valid: true},
+			},
+		},
+	}
+
+	got := model.SummaryView(80, 10, false)
+
+	if !strings.Contains(got, "Today") {
+		t.Fatalf("expected today's task in summary, got:\n%s", got)
+	}
+	if strings.Contains(got, "Future") {
+		t.Fatalf("expected future task to be excluded, got:\n%s", got)
+	}
+}
+
+func TestSummaryViewShowsOverdueCount(t *testing.T) {
+	withCurrentDate(t, "2026-05-05")
+
+	model := Model{
+		allTasks: []Task{
+			{
+				Title:    "Late one",
+				Priority: 1,
+				DueDate:  sql.NullString{String: "2026-05-04", Valid: true},
+			},
+			{
+				Title:    "Late two",
+				Priority: 1,
+				DueDate:  sql.NullString{String: "2026-05-03", Valid: true},
+			},
+		},
+	}
+
+	got := model.SummaryView(80, 10, false)
+
+	if !strings.Contains(got, "2 overdue") {
+		t.Fatalf("expected overdue count, got:\n%s", got)
+	}
+}
+
 func TestExpandedViewShowsSelectedTask(t *testing.T) {
 	model := Model{
 		selected: 1,

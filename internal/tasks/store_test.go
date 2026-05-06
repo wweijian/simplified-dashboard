@@ -165,6 +165,27 @@ func TestUpdatePriority(t *testing.T) {
 	}
 }
 
+func TestUpdateTask(t *testing.T) {
+	store := openTestStore(t)
+
+	seedTask(t, store, "Draft")
+	tasks := mustListTasks(t, store)
+
+	input := UpdateTaskInput{
+		Title:       "Final",
+		Description: sql.NullString{String: "Updated notes", Valid: true},
+		DueDate:     sql.NullString{String: "2026-05-20", Valid: true},
+		Priority:    2,
+	}
+
+	if err := store.Update(tasks[0].ID, input); err != nil {
+		t.Fatalf("update task: %v", err)
+	}
+
+	tasks = mustListTasks(t, store)
+	assertTaskMatchesInput(t, tasks[0], input)
+}
+
 func TestListByPriority(t *testing.T) {
 	store := openTestStore(t)
 

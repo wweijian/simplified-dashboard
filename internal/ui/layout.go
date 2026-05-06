@@ -47,6 +47,9 @@ func renderLayout(model Model) string {
 	if model.mode == ModeAddTask {
 		return overlayCentered(layout, model.addTaskForm.View(model.width), model.width, model.height)
 	}
+	if model.mode == ModeEditTask {
+		return overlayCentered(layout, model.addTaskForm.ViewWithTitle(model.width, "Edit task"), model.width, model.height)
+	}
 	return layout
 }
 

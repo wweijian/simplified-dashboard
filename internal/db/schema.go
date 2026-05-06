@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS habit_logs (
     habit_id   INTEGER NOT NULL REFERENCES habits(id),
     date       TEXT NOT NULL,
     completed  INTEGER DEFAULT 0,
+    status     TEXT NOT NULL DEFAULT 'incomplete',
     UNIQUE(habit_id, date)
 );
 

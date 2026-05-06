@@ -1,7 +1,6 @@
 package db
 
-import 
-(
+import (
 	"database/sql"
 	"fmt"
 	"os"
@@ -37,5 +36,64 @@ func Open() (*DB, error) {
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
 
+	if err := migrateHabitLogStatus(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	return &DB{db}, nil
+}
+
+func migrateHabitLogStatus(db *sql.DB) error {
+	hasStatus, err := tableHasColumn(db, "habit_logs", "status")
+	if err != nil {
+		return fmt.Errorf("inspect habit logs schema: %w", err)
+	}
+	if hasStatus {
+		return nil
+	}
+
+	if _, err := db.Exec(`
+		ALTER TABLE habit_logs
+		ADD COLUMN status TEXT NOT NULL DEFAULT 'incomplete'
+	`); err != nil {
+		return fmt.Errorf("add habit log status column: %w", err)
+	}
+
+	if _, err := db.Exec(`
+		UPDATE habit_logs
+		SET status = CASE completed WHEN 1 THEN 'complete' ELSE 'incomplete' END
+	`); err != nil {
+		return fmt.Errorf("backfill habit log status: %w", err)
+	}
+
+	return nil
+}
+
+func tableHasColumn(db *sql.DB, tableName, columnName string) (bool, error) {
+	rows, err := db.Query(`PRAGMA table_info(` + tableName + `)`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if name == columnName {
+			return true, nil
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
 }

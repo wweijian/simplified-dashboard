@@ -50,6 +50,12 @@ func renderLayout(model Model) string {
 	if model.mode == ModeEditTask {
 		return overlayCentered(layout, model.addTaskForm.ViewWithTitle(model.width, "Edit task"), model.width, model.height)
 	}
+	if model.mode == ModeAddHabit {
+		return overlayCentered(layout, model.addHabitForm.View(model.width), model.width, model.height)
+	}
+	if model.mode == ModeEditHabit {
+		return overlayCentered(layout, model.addHabitForm.ViewWithTitle(model.width, "Edit habit"), model.width, model.height)
+	}
 	return layout
 }
 

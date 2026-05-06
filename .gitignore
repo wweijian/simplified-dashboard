@@ -11,3 +11,6 @@ docs/
 
 # executables
 simplified-dashboard
+
+#test files
+*_test.go

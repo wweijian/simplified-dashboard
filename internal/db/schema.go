@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS finance_transactions (
     amount      REAL NOT NULL,
     category_id INTEGER REFERENCES finance_categories(id),
     description TEXT,
-    account     TEXT,
     created_at  TEXT DEFAULT (datetime('now'))
 );
 

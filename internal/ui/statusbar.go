@@ -5,7 +5,7 @@ import (
 )
 
 func renderStatusBar(model Model) string {
-	hints := "1-4: jump  tab/shift+tab: switch panel  a add  e edit  tasks: [] filter s sort  habits: left/right day space cycle c/s/x mark  q quit"
+	hints := "1-4: jump  tab/shift+tab: panel  finance: left/right month [] category 0 all c compare  tasks: [] filter s sort  habits: space/c/s/x mark  q quit"
 
 	return lipgloss.NewStyle().
 		Width(model.width).

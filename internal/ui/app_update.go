@@ -164,6 +164,9 @@ func (model Model) updateActivePanel(key string) Model {
 	if model.activePanel == int(Tasks) {
 		model.tasks = model.tasks.Update(key)
 	}
+	if model.activePanel == int(Finance) {
+		model.finance = model.finance.Update(key)
+	}
 	if model.activePanel == int(Habits) {
 		model.habits = model.habits.Update(key)
 	}

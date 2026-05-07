@@ -14,3 +14,7 @@ simplified-dashboard
 
 #test files
 *_test.go
+
+#environment files
+.env
+

@@ -36,7 +36,7 @@ type Model struct {
 	editingHabitID int64
 	calendar       Panel
 	tasks          tasks.Model
-	finance        Panel
+	finance        finance.Model
 	habits         habits.Model
 }
 
@@ -48,7 +48,7 @@ func New(database *db.DB) Model {
 		addHabitForm: newAddHabitForm(),
 		calendar:     calendar.New(),
 		tasks:        tasks.New(tasks.NewStore(database)),
-		finance:      finance.New(),
+		finance:      finance.New(finance.NewStore(database)),
 		habits:       habits.New(habits.NewStore(database)),
 	}
 }

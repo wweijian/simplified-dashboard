@@ -1,6 +1,7 @@
 # All dot files
 .*
 !.gitignore
+!.env.example
 
 # planning files
 docs/
@@ -12,9 +13,6 @@ docs/
 # executables
 simplified-dashboard
 
-#test files
-*_test.go
-
 #environment files
 .env
-
+db/

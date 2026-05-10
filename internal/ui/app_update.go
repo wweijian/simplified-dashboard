@@ -24,6 +24,9 @@ func (model Model) updateKey(msg bbt.KeyMsg) (Model, bbt.Cmd) {
 	if model.isTaskFormMode() {
 		return model.updateTaskFormMode(msg), nil
 	}
+	if model.isFinanceFormMode() {
+		return model.updateFinanceFormMode(msg), nil
+	}
 	if model.isHabitFormMode() {
 		return model.updateHabitFormMode(msg), nil
 	}
@@ -50,6 +53,10 @@ func (model Model) isTaskFormMode() bool {
 	return model.mode == ModeAddTask || model.mode == ModeEditTask
 }
 
+func (model Model) isFinanceFormMode() bool {
+	return model.mode == ModeAddFinanceTransaction || model.mode == ModeEditFinanceTransaction
+}
+
 func (model Model) isHabitFormMode() bool {
 	return model.mode == ModeAddHabit || model.mode == ModeEditHabit
 }
@@ -62,6 +69,18 @@ func (model Model) updateTaskFormMode(msg bbt.KeyMsg) Model {
 		return model.submitTaskForm()
 	default:
 		model.addTaskForm = model.addTaskForm.Update(msg)
+		return model
+	}
+}
+
+func (model Model) updateFinanceFormMode(msg bbt.KeyMsg) Model {
+	switch msg.String() {
+	case "esc":
+		return model.closeFinanceForm()
+	case "enter":
+		return model.submitFinanceForm()
+	default:
+		model.addFinanceForm = model.addFinanceForm.Update(msg)
 		return model
 	}
 }
@@ -93,6 +112,21 @@ func (model Model) submitTaskForm() Model {
 	return model.closeTaskForm()
 }
 
+func (model Model) submitFinanceForm() Model {
+	form, input, ok := model.addFinanceForm.Submit()
+	model.addFinanceForm = form
+	if !ok {
+		return model
+	}
+
+	if model.mode == ModeEditFinanceTransaction {
+		model.finance = model.finance.UpdateTransaction(model.editingFinanceTransactionID, input)
+	} else {
+		model.finance = model.finance.CreateTransaction(input)
+	}
+	return model.closeFinanceForm()
+}
+
 func (model Model) submitHabitForm() Model {
 	form, input, ok := model.addHabitForm.Submit()
 	model.addHabitForm = form
@@ -106,6 +140,13 @@ func (model Model) submitHabitForm() Model {
 		model.habits = model.habits.Create(input)
 	}
 	return model.closeHabitForm()
+}
+
+func (model Model) closeFinanceForm() Model {
+	model.mode = ModeNormal
+	model.addFinanceForm = newAddFinanceTransactionForm(model.finance.TransactionCategories(), model.finance.DefaultTransactionDate(time.Now()))
+	model.editingFinanceTransactionID = 0
+	return model
 }
 
 func (model Model) closeTaskForm() Model {
@@ -127,6 +168,9 @@ func (model Model) openAddMode() Model {
 	case int(Tasks):
 		model.mode = ModeAddTask
 		model.addTaskForm = newAddTaskForm()
+	case int(Finance):
+		model.mode = ModeAddFinanceTransaction
+		model.addFinanceForm = newAddFinanceTransactionForm(model.finance.TransactionCategories(), model.finance.DefaultTransactionDate(time.Now()))
 	case int(Habits):
 		model.mode = ModeAddHabit
 		model.addHabitForm = newAddHabitForm()
@@ -138,6 +182,8 @@ func (model Model) openEditMode() Model {
 	switch model.activePanel {
 	case int(Tasks):
 		return model.openTaskEditMode()
+	case int(Finance):
+		return model.openFinanceEditMode()
 	case int(Habits):
 		return model.openHabitEditMode()
 	default:
@@ -154,6 +200,18 @@ func (model Model) openTaskEditMode() Model {
 	model.mode = ModeEditTask
 	model.editingTaskID = task.ID
 	model.addTaskForm = newEditTaskForm(task, time.Now())
+	return model
+}
+
+func (model Model) openFinanceEditMode() Model {
+	transaction, ok := model.finance.SelectedTransaction()
+	if !ok {
+		return model
+	}
+
+	model.mode = ModeEditFinanceTransaction
+	model.editingFinanceTransactionID = transaction.ID
+	model.addFinanceForm = newEditFinanceTransactionForm(transaction, model.finance.TransactionCategories())
 	return model
 }
 

@@ -19,8 +19,33 @@ func (model Model) Update(key string) Model {
 		model.load()
 		return model
 	default:
+		return model.updateSelectedTransaction(key)
+	}
+}
+
+func (model Model) updateSelectedTransaction(key string) Model {
+	if len(model.transactions) == 0 {
 		return model
 	}
+
+	switch key {
+	case "up":
+		return model.moveTransactionSelection(-1)
+	case "down":
+		return model.moveTransactionSelection(1)
+	case "d":
+		return model.DeleteSelectedTransaction()
+	default:
+		return model
+	}
+}
+
+func (model Model) moveTransactionSelection(distance int) Model {
+	nextSelection := model.selectedTransaction + distance
+	if nextSelection >= 0 && nextSelection < len(model.transactions) {
+		model.selectedTransaction = nextSelection
+	}
+	return model
 }
 
 func (model Model) moveMonth(distance int) Model {

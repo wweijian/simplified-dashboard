@@ -34,6 +34,45 @@ func (store Store) TransactionsForMonth(month time.Time, category CategoryFilter
 	return scanTransactions(rows)
 }
 
+func (store Store) CreateTransaction(input CreateTransactionInput) (int64, error) {
+	result, err := store.db.Exec(`
+		INSERT INTO finance_transactions (date, amount, category_id, description)
+		VALUES (?, ?, ?, ?)
+	`, input.Date, input.Amount, input.CategoryID, input.Description)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create finance transaction: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("read created finance transaction id: %w", err)
+	}
+	return id, nil
+}
+
+func (store Store) UpdateTransaction(id int64, input UpdateTransactionInput) error {
+	_, err := store.db.Exec(`
+		UPDATE finance_transactions
+		SET date = ?, amount = ?, category_id = ?, description = ?
+		WHERE id = ?
+	`, input.Date, input.Amount, input.CategoryID, input.Description, id)
+	if err != nil {
+		return fmt.Errorf("failed to update finance transaction: %w", err)
+	}
+	return nil
+}
+
+func (store Store) DeleteTransaction(id int64) error {
+	_, err := store.db.Exec(`
+		DELETE FROM finance_transactions
+		WHERE id = ?
+	`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete finance transaction: %w", err)
+	}
+	return nil
+}
+
 const transactionsForMonthQuery = `
 	SELECT
 		t.id,

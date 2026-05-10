@@ -17,17 +17,19 @@ var currentMonth = func() time.Time {
 }
 
 type Model struct {
-	store             *Store
-	selectedMonth     time.Time
-	categoryIndex     int
-	showComparison    bool
-	categories        []Category
-	transactions      []Transaction
-	summary           MonthlySummary
-	topCategories     []CategorySpend
-	categoryBreakdown []CategorySpend
-	monthlyTrend      []MonthSpend
-	err               error
+	store                 *Store
+	selectedMonth         time.Time
+	categoryIndex         int
+	showComparison        bool
+	categories            []Category
+	transactionCategories []Category
+	transactions          []Transaction
+	selectedTransaction   int
+	summary               MonthlySummary
+	topCategories         []CategorySpend
+	categoryBreakdown     []CategorySpend
+	monthlyTrend          []MonthSpend
+	err                   error
 }
 
 func New(store *Store) Model {
@@ -58,16 +60,19 @@ func (model *Model) load() {
 	model.categoryBreakdown = snapshot.categoryBreakdown
 	model.monthlyTrend = snapshot.monthlyTrend
 	model.transactions = snapshot.transactions
+	model.transactionCategories = snapshot.transactionCategories
+	model.clampTransactionSelection()
 	model.err = nil
 }
 
 type financeSnapshot struct {
-	summary           MonthlySummary
-	topCategories     []CategorySpend
-	categories        []Category
-	categoryBreakdown []CategorySpend
-	monthlyTrend      []MonthSpend
-	transactions      []Transaction
+	summary               MonthlySummary
+	topCategories         []CategorySpend
+	categories            []Category
+	transactionCategories []Category
+	categoryBreakdown     []CategorySpend
+	monthlyTrend          []MonthSpend
+	transactions          []Transaction
 }
 
 func (model Model) loadSnapshot() (financeSnapshot, error) {
@@ -85,6 +90,11 @@ func (model Model) loadSnapshot() (financeSnapshot, error) {
 }
 
 func (model Model) loadAnalyticsSnapshot(summary MonthlySummary, topCategories []CategorySpend) (financeSnapshot, error) {
+	transactionCategories, err := model.store.ListCategories()
+	if err != nil {
+		return financeSnapshot{}, err
+	}
+
 	categories, err := model.store.ListExpenseCategories()
 	if err != nil {
 		return financeSnapshot{}, err
@@ -106,13 +116,90 @@ func (model Model) loadAnalyticsSnapshot(summary MonthlySummary, topCategories [
 		return financeSnapshot{}, err
 	}
 	return financeSnapshot{
-		summary:           summary,
-		topCategories:     topCategories,
-		categories:        categories,
-		categoryBreakdown: breakdown,
-		monthlyTrend:      trend,
-		transactions:      transactions,
+		summary:               summary,
+		topCategories:         topCategories,
+		categories:            categories,
+		transactionCategories: transactionCategories,
+		categoryBreakdown:     breakdown,
+		monthlyTrend:          trend,
+		transactions:          transactions,
 	}, nil
+}
+
+func (model Model) TransactionCategories() []Category {
+	categories := make([]Category, len(model.transactionCategories))
+	copy(categories, model.transactionCategories)
+	return categories
+}
+
+func (model Model) DefaultTransactionDate(now time.Time) time.Time {
+	if monthStart(now).Equal(model.selectedMonth) {
+		return now
+	}
+	return model.selectedMonth
+}
+
+func (model Model) SelectedTransaction() (Transaction, bool) {
+	if len(model.transactions) == 0 || model.selectedTransaction < 0 || model.selectedTransaction >= len(model.transactions) {
+		return Transaction{}, false
+	}
+	return model.transactions[model.selectedTransaction], true
+}
+
+func (model Model) CreateTransaction(input CreateTransactionInput) Model {
+	id, err := model.store.CreateTransaction(input)
+	if err != nil {
+		model.err = err
+		return model
+	}
+
+	model.load()
+	return model.selectTransaction(id)
+}
+
+func (model Model) UpdateTransaction(id int64, input UpdateTransactionInput) Model {
+	if err := model.store.UpdateTransaction(id, input); err != nil {
+		model.err = err
+		return model
+	}
+
+	model.load()
+	return model.selectTransaction(id)
+}
+
+func (model Model) DeleteSelectedTransaction() Model {
+	transaction, ok := model.SelectedTransaction()
+	if !ok {
+		return model
+	}
+
+	if err := model.store.DeleteTransaction(transaction.ID); err != nil {
+		model.err = err
+		return model
+	}
+
+	model.load()
+	model.clampTransactionSelection()
+	return model
+}
+
+func (model *Model) clampTransactionSelection() {
+	if model.selectedTransaction >= len(model.transactions) {
+		model.selectedTransaction = len(model.transactions) - 1
+	}
+	if model.selectedTransaction < 0 {
+		model.selectedTransaction = 0
+	}
+}
+
+func (model Model) selectTransaction(id int64) Model {
+	for i, transaction := range model.transactions {
+		if transaction.ID == id {
+			model.selectedTransaction = i
+			break
+		}
+	}
+	return model
 }
 
 func (model Model) SelectedCategory() CategoryFilter {

@@ -69,8 +69,12 @@ func (model Model) transactionLines() []string {
 	}
 
 	lines := make([]string, 0, len(model.transactions))
-	for _, transaction := range model.transactions {
-		lines = append(lines, transactionRow(transaction))
+	for i, transaction := range model.transactions {
+		prefix := "  "
+		if i == model.selectedTransaction {
+			prefix = "> "
+		}
+		lines = append(lines, prefix+transactionRow(transaction))
 	}
 	return lines
 }

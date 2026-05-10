@@ -70,15 +70,22 @@ func seedCategory(t *testing.T, sqlDB *sql.DB, name, categoryType string) int64 
 	return id
 }
 
-func seedTransaction(t *testing.T, sqlDB *sql.DB, date string, amount float64, categoryID int64, description string) {
+func seedTransaction(t *testing.T, sqlDB *sql.DB, date string, amount float64, categoryID int64, description string) int64 {
 	t.Helper()
 
-	if _, err := sqlDB.Exec(`
+	result, err := sqlDB.Exec(`
 		INSERT INTO finance_transactions (date, amount, category_id, description)
 		VALUES (?, ?, ?, ?)
-	`, date, amount, categoryID, description); err != nil {
+	`, date, amount, categoryID, description)
+	if err != nil {
 		t.Fatalf("seed transaction: %v", err)
 	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("transaction id: %v", err)
+	}
+	return id
 }
 
 func TestEnsureDefaultCategoriesIsIdempotent(t *testing.T) {
@@ -168,5 +175,57 @@ func TestListRecentTransactionsNewestFirst(t *testing.T) {
 	}
 	if !transactions[0].CategoryName.Valid || transactions[0].CategoryName.String != "Food" {
 		t.Fatalf("expected joined category, got %#v", transactions[0].CategoryName)
+	}
+}
+
+func TestCreateUpdateDeleteTransaction(t *testing.T) {
+	store, sqlDB := openTestStore(t)
+	foodID := seedCategory(t, sqlDB, "Food", "expense")
+	billsID := seedCategory(t, sqlDB, "Bills", "expense")
+
+	id, err := store.CreateTransaction(CreateTransactionInput{
+		Date:        "2026-05-06",
+		Amount:      -24.50,
+		CategoryID:  sql.NullInt64{Int64: foodID, Valid: true},
+		Description: sql.NullString{String: "Lunch", Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("create transaction: %v", err)
+	}
+
+	if err := store.UpdateTransaction(id, UpdateTransactionInput{
+		Date:        "2026-05-07",
+		Amount:      -100,
+		CategoryID:  sql.NullInt64{Int64: billsID, Valid: true},
+		Description: sql.NullString{String: "Power", Valid: true},
+	}); err != nil {
+		t.Fatalf("update transaction: %v", err)
+	}
+
+	var date string
+	var amount float64
+	var categoryID int64
+	var description string
+	if err := sqlDB.QueryRow(`
+		SELECT date, amount, category_id, description
+		FROM finance_transactions
+		WHERE id = ?
+	`, id).Scan(&date, &amount, &categoryID, &description); err != nil {
+		t.Fatalf("query transaction: %v", err)
+	}
+	if date != "2026-05-07" || amount != -100 || categoryID != billsID || description != "Power" {
+		t.Fatalf("updated transaction = (%q, %.2f, %d, %q)", date, amount, categoryID, description)
+	}
+
+	if err := store.DeleteTransaction(id); err != nil {
+		t.Fatalf("delete transaction: %v", err)
+	}
+
+	var count int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM finance_transactions`).Scan(&count); err != nil {
+		t.Fatalf("count transactions: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected transaction to be deleted, got %d", count)
 	}
 }

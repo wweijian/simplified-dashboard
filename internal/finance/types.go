@@ -22,6 +22,15 @@ type Transaction struct {
 	CreatedAt    string
 }
 
+type CreateTransactionInput struct {
+	Date        string
+	Amount      float64
+	CategoryID  sql.NullInt64
+	Description sql.NullString
+}
+
+type UpdateTransactionInput = CreateTransactionInput
+
 type MonthlySummary struct {
 	Month    time.Time
 	Income   float64

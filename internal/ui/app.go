@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"time"
 
 	calendar "simplified-dashboard/internal/calendar"
 	"simplified-dashboard/internal/db"
@@ -23,35 +24,40 @@ const (
 	ModeNormal ViewMode = iota
 	ModeAddTask
 	ModeEditTask
+	ModeAddFinanceTransaction
+	ModeEditFinanceTransaction
 	ModeAddHabit
 	ModeEditHabit
 )
 
 type Model struct {
-	width          int
-	height         int
-	activePanel    int
-	mode           ViewMode
-	addTaskForm    addTaskForm
-	addHabitForm   addHabitForm
-	editingTaskID  int64
-	editingHabitID int64
-	calendar       calendar.Model
-	tasks          tasks.Model
-	finance        finance.Model
-	habits         habits.Model
+	width                       int
+	height                      int
+	activePanel                 int
+	mode                        ViewMode
+	addTaskForm                 addTaskForm
+	addFinanceForm              addFinanceTransactionForm
+	addHabitForm                addHabitForm
+	editingTaskID               int64
+	editingFinanceTransactionID int64
+	editingHabitID              int64
+	calendar                    calendar.Model
+	tasks                       tasks.Model
+	finance                     finance.Model
+	habits                      habits.Model
 }
 
 func New(database *db.DB) Model {
 	return Model{
-		activePanel:  int(Calendar),
-		mode:         ModeNormal,
-		addTaskForm:  newAddTaskForm(),
-		addHabitForm: newAddHabitForm(),
-		calendar:     calendar.New().StartLoading(),
-		tasks:        tasks.New(tasks.NewStore(database)),
-		finance:      finance.New(finance.NewStore(database)),
-		habits:       habits.New(habits.NewStore(database)),
+		activePanel:    int(Calendar),
+		mode:           ModeNormal,
+		addTaskForm:    newAddTaskForm(),
+		addFinanceForm: newAddFinanceTransactionForm(nil, time.Now()),
+		addHabitForm:   newAddHabitForm(),
+		calendar:       calendar.New().StartLoading(),
+		tasks:          tasks.New(tasks.NewStore(database)),
+		finance:        finance.New(finance.NewStore(database)),
+		habits:         habits.New(habits.NewStore(database)),
 	}
 }
 

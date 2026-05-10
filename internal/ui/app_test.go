@@ -116,6 +116,26 @@ func habitCount(t *testing.T, sqlDB *sql.DB) int {
 	return count
 }
 
+func financeTransactionCount(t *testing.T, sqlDB *sql.DB) int {
+	t.Helper()
+
+	var count int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM finance_transactions`).Scan(&count); err != nil {
+		t.Fatalf("count finance transactions: %v", err)
+	}
+	return count
+}
+
+func financeCategoryID(t *testing.T, sqlDB *sql.DB, name string) int64 {
+	t.Helper()
+
+	var id int64
+	if err := sqlDB.QueryRow(`SELECT id FROM finance_categories WHERE name = ?`, name).Scan(&id); err != nil {
+		t.Fatalf("query finance category %s: %v", name, err)
+	}
+	return id
+}
+
 func TestAOpensAddTaskModeWithoutCreatingTask(t *testing.T) {
 	database, sqlDB := openTestDatabase(t)
 	model := New(database)
@@ -132,19 +152,210 @@ func TestAOpensAddTaskModeWithoutCreatingTask(t *testing.T) {
 	}
 }
 
-func TestAIgnoredOutsideTaskPanel(t *testing.T) {
+func TestAIgnoredOutsideEditablePanels(t *testing.T) {
+	database, sqlDB := openTestDatabase(t)
+	model := New(database)
+	model.activePanel = int(Calendar)
+
+	model = pressRune(model, "a")
+
+	if model.mode != ModeNormal {
+		t.Fatalf("expected normal mode outside editable panel, got %d", model.mode)
+	}
+
+	if taskCount(t, sqlDB) != 0 {
+		t.Fatalf("expected no placeholder task, got %d", taskCount(t, sqlDB))
+	}
+}
+
+func TestAOpensAddFinanceTransactionModeWithoutCreatingTransaction(t *testing.T) {
 	database, sqlDB := openTestDatabase(t)
 	model := New(database)
 	model.activePanel = int(Finance)
 
 	model = pressRune(model, "a")
 
+	if model.mode != ModeAddFinanceTransaction {
+		t.Fatalf("expected add-finance mode, got %d", model.mode)
+	}
+	if financeTransactionCount(t, sqlDB) != 0 {
+		t.Fatalf("expected no placeholder transaction, got %d", financeTransactionCount(t, sqlDB))
+	}
+}
+
+func TestAddFinanceTransactionModeRendersPopup(t *testing.T) {
+	database, _ := openTestDatabase(t)
+	model := New(database)
+	model.activePanel = int(Finance)
+	model = resize(model, 90, 28)
+
+	model = pressRune(model, "a")
+
+	got := model.View()
+	if !strings.Contains(got, "Add transaction") || !strings.Contains(got, "Amount") || !strings.Contains(got, "Category") {
+		t.Fatalf("expected add-finance popup, got:\n%s", got)
+	}
+	for _, category := range []string{"Bills", "Food", "Groceries", "Health", "Income", "Shopping", "Subscriptions", "Transport", "Travel", "Uncategorized"} {
+		if !strings.Contains(got, category) {
+			t.Fatalf("expected category %q to be visible, got:\n%s", category, got)
+		}
+	}
+}
+
+func TestAddFinanceTransactionCanSelectTenthCategory(t *testing.T) {
+	database, _ := openTestDatabase(t)
+	model := New(database)
+	model.activePanel = int(Finance)
+
+	model = pressRune(model, "a")
+	model.addFinanceForm.field = addFinanceTransactionCategory
+	model = pressRune(model, "0")
+
+	category, ok := model.addFinanceForm.selectedCategory()
+	if !ok || category.Name != "Income" {
+		t.Fatalf("expected 0 to select tenth category Income, got %#v ok=%v", category, ok)
+	}
+}
+
+func TestValidAddFinanceTransactionSubmitCreatesExpense(t *testing.T) {
+	database, sqlDB := openTestDatabase(t)
+	model := New(database)
+	model.activePanel = int(Finance)
+
+	model = pressRune(model, "a")
+	model.addFinanceForm.date = "2026-05-06"
+	model.addFinanceForm.amount = "24.50"
+	model.addFinanceForm.description = "Lunch"
+	model = pressType(model, bbt.KeyEnter)
+
 	if model.mode != ModeNormal {
-		t.Fatalf("expected normal mode outside task panel, got %d", model.mode)
+		t.Fatalf("expected normal mode after finance submit, got %d", model.mode)
 	}
 
-	if taskCount(t, sqlDB) != 0 {
-		t.Fatalf("expected no placeholder task, got %d", taskCount(t, sqlDB))
+	var date string
+	var amount float64
+	var categoryID sql.NullInt64
+	var description string
+	if err := sqlDB.QueryRow(`
+		SELECT date, amount, category_id, description
+		FROM finance_transactions
+	`).Scan(&date, &amount, &categoryID, &description); err != nil {
+		t.Fatalf("query created finance transaction: %v", err)
+	}
+	if date != "2026-05-06" || amount != -24.50 || !categoryID.Valid || description != "Lunch" {
+		t.Fatalf("created transaction = (%q, %.2f, %#v, %q)", date, amount, categoryID, description)
+	}
+}
+
+func TestAddFinanceTransactionCanCreateIncome(t *testing.T) {
+	database, sqlDB := openTestDatabase(t)
+	model := New(database)
+	model.activePanel = int(Finance)
+
+	model = pressRune(model, "a")
+	model.addFinanceForm.date = "2026-05-06"
+	model.addFinanceForm.amount = "5000"
+	model.addFinanceForm.categoryIndex = model.addFinanceForm.categoryIndexFor(sql.NullInt64{
+		Int64: financeCategoryID(t, sqlDB, "Income"),
+		Valid: true,
+	})
+	model.addFinanceForm.description = "Salary"
+	model = pressType(model, bbt.KeyEnter)
+
+	var amount float64
+	if err := sqlDB.QueryRow(`SELECT amount FROM finance_transactions`).Scan(&amount); err != nil {
+		t.Fatalf("query income transaction: %v", err)
+	}
+	if amount != 5000 {
+		t.Fatalf("expected income amount to stay positive, got %.2f", amount)
+	}
+}
+
+func TestInvalidFinanceTransactionDoesNotSubmit(t *testing.T) {
+	database, sqlDB := openTestDatabase(t)
+	model := New(database)
+	model.activePanel = int(Finance)
+
+	model = pressRune(model, "a")
+	model.addFinanceForm.date = "2026/05/06"
+	model.addFinanceForm.amount = "24.50"
+	model = pressType(model, bbt.KeyEnter)
+
+	if model.mode != ModeAddFinanceTransaction {
+		t.Fatalf("expected add-finance mode after invalid submit, got %d", model.mode)
+	}
+	if model.addFinanceForm.errorText == "" {
+		t.Fatalf("expected validation error")
+	}
+	if financeTransactionCount(t, sqlDB) != 0 {
+		t.Fatalf("expected no transaction after invalid submit, got %d", financeTransactionCount(t, sqlDB))
+	}
+}
+
+func TestEOpensEditFinanceTransactionMode(t *testing.T) {
+	database, sqlDB := openTestDatabase(t)
+	model := New(database)
+	foodID := financeCategoryID(t, sqlDB, "Food")
+	if _, err := sqlDB.Exec(`
+		INSERT INTO finance_transactions (date, amount, category_id, description)
+		VALUES ('2026-05-06', -24.50, ?, 'Lunch')
+	`, foodID); err != nil {
+		t.Fatalf("seed transaction: %v", err)
+	}
+	model.finance = model.finance.Update("r")
+	model.activePanel = int(Finance)
+	model = resize(model, 90, 28)
+
+	model = pressRune(model, "e")
+
+	if model.mode != ModeEditFinanceTransaction {
+		t.Fatalf("expected edit-finance mode, got %d", model.mode)
+	}
+	if model.editingFinanceTransactionID == 0 {
+		t.Fatalf("expected editing transaction id to be set")
+	}
+	if !strings.Contains(model.View(), "Edit transaction") {
+		t.Fatalf("expected edit-finance popup, got:\n%s", model.View())
+	}
+}
+
+func TestEditFinanceTransactionSubmitUpdatesTransaction(t *testing.T) {
+	database, sqlDB := openTestDatabase(t)
+	model := New(database)
+	foodID := financeCategoryID(t, sqlDB, "Food")
+	billsID := financeCategoryID(t, sqlDB, "Bills")
+	if _, err := sqlDB.Exec(`
+		INSERT INTO finance_transactions (date, amount, category_id, description)
+		VALUES ('2026-05-06', -24.50, ?, 'Lunch')
+	`, foodID); err != nil {
+		t.Fatalf("seed transaction: %v", err)
+	}
+	model.finance = model.finance.Update("r")
+	model.activePanel = int(Finance)
+
+	model = pressRune(model, "e")
+	model.addFinanceForm.date = "2026-05-07"
+	model.addFinanceForm.amount = "100"
+	model.addFinanceForm.categoryIndex = model.addFinanceForm.categoryIndexFor(sql.NullInt64{Int64: billsID, Valid: true})
+	model.addFinanceForm.description = "Power"
+	model = pressType(model, bbt.KeyEnter)
+
+	if model.mode != ModeNormal {
+		t.Fatalf("expected normal mode after edit submit, got %d", model.mode)
+	}
+
+	var date string
+	var amount float64
+	var categoryID int64
+	var description string
+	if err := sqlDB.QueryRow(`
+		SELECT date, amount, category_id, description
+		FROM finance_transactions
+	`).Scan(&date, &amount, &categoryID, &description); err != nil {
+		t.Fatalf("query updated transaction: %v", err)
+	}
+	if date != "2026-05-07" || amount != -100 || categoryID != billsID || description != "Power" {
+		t.Fatalf("updated transaction = (%q, %.2f, %d, %q)", date, amount, categoryID, description)
 	}
 }
 

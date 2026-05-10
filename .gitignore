@@ -16,3 +16,6 @@ simplified-dashboard
 #environment files
 .env
 db/
+
+# pycache
+scripts/__pycache__/

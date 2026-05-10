@@ -25,6 +25,7 @@ func (store Store) TransactionsForMonth(month time.Time, category CategoryFilter
 		category.ID.Valid,
 		category.ID.Int64,
 		limit,
+		limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query monthly finance transactions: %w", err)
@@ -88,7 +89,7 @@ const transactionsForMonthQuery = `
 	WHERE t.date >= ? AND t.date < ?
 		AND (? = 0 OR t.category_id = ?)
 	ORDER BY t.date DESC, t.id DESC
-	LIMIT ?
+	LIMIT CASE WHEN ? > 0 THEN ? ELSE -1 END
 `
 
 const recentTransactionsQuery = `

@@ -18,7 +18,8 @@ func (model Model) ExpandedView(width, height int) string {
 	lines = append(lines, "", financeDivider(width), "")
 	lines = append(lines, model.analyticsChart(width)...)
 	lines = append(lines, "", "", financeTitleStyle.Render("Recent Transactions"), "")
-	lines = append(lines, model.transactionLines()...)
+	transactionLineCount := max(height-len(lines), 1)
+	lines = append(lines, model.transactionLines(transactionLineCount)...)
 
 	return strings.Join(limitLines(lines, height), "\n")
 }
@@ -63,13 +64,15 @@ func financeDivider(width int) string {
 	return financeMetaStyle.Render(strings.Repeat("─", max(width, 0)))
 }
 
-func (model Model) transactionLines() []string {
+func (model Model) transactionLines(limit int) []string {
 	if len(model.transactions) == 0 {
 		return []string{"No transactions for this selection"}
 	}
 
-	lines := make([]string, 0, len(model.transactions))
-	for i, transaction := range model.transactions {
+	start, end := model.transactionWindow(limit)
+	lines := make([]string, 0, end-start)
+	for i := start; i < end; i++ {
+		transaction := model.transactions[i]
 		prefix := "  "
 		if i == model.selectedTransaction {
 			prefix = "> "
@@ -77,4 +80,19 @@ func (model Model) transactionLines() []string {
 		lines = append(lines, prefix+transactionRow(transaction))
 	}
 	return lines
+}
+
+func (model Model) transactionWindow(limit int) (int, int) {
+	if limit <= 0 || limit >= len(model.transactions) {
+		return 0, len(model.transactions)
+	}
+
+	start := model.selectedTransaction - limit/2
+	if start < 0 {
+		start = 0
+	}
+	if start+limit > len(model.transactions) {
+		start = len(model.transactions) - limit
+	}
+	return start, start + limit
 }

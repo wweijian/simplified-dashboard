@@ -178,6 +178,27 @@ func TestListRecentTransactionsNewestFirst(t *testing.T) {
 	}
 }
 
+func TestTransactionsForMonthCanReturnAllRowsWithoutLimit(t *testing.T) {
+	store, sqlDB := openTestStore(t)
+	foodID := seedCategory(t, sqlDB, "Food", "expense")
+
+	seedTransaction(t, sqlDB, "2026-05-02", -24.50, foodID, "Oldest")
+	seedTransaction(t, sqlDB, "2026-05-03", -25.50, foodID, "Middle")
+	seedTransaction(t, sqlDB, "2026-05-04", -26.50, foodID, "Newest")
+
+	transactions, err := store.TransactionsForMonth(dateMonth(2026, 5), CategoryFilter{Name: "All"}, 0)
+	if err != nil {
+		t.Fatalf("transactions for month: %v", err)
+	}
+
+	if len(transactions) != 3 {
+		t.Fatalf("expected all 3 transactions, got %d", len(transactions))
+	}
+	if transactions[0].Description.String != "Newest" || transactions[2].Description.String != "Oldest" {
+		t.Fatalf("expected newest-first order, got %#v", transactions)
+	}
+}
+
 func TestCreateUpdateDeleteTransaction(t *testing.T) {
 	store, sqlDB := openTestStore(t)
 	foodID := seedCategory(t, sqlDB, "Food", "expense")

@@ -116,6 +116,40 @@ func TestCategoryChartShowsZeroSpendCategories(t *testing.T) {
 	}
 }
 
+func TestTransactionLinesScrollAroundSelectedTransaction(t *testing.T) {
+	model := Model{
+		transactions: []Transaction{
+			testTransaction("First"),
+			testTransaction("Second"),
+			testTransaction("Third"),
+			testTransaction("Fourth"),
+			testTransaction("Fifth"),
+		},
+		selectedTransaction: 3,
+	}
+
+	lines := model.transactionLines(3)
+
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 visible transaction lines, got %d", len(lines))
+	}
+	if strings.Contains(strings.Join(lines, "\n"), "First") {
+		t.Fatalf("expected first transaction to be scrolled away, got %q", lines)
+	}
+	if !strings.Contains(lines[1], ">") || !strings.Contains(lines[1], "Fourth") {
+		t.Fatalf("expected selected fourth transaction in middle, got %q", lines)
+	}
+}
+
+func testTransaction(description string) Transaction {
+	return Transaction{
+		Date:         "2026-05-06",
+		Amount:       -1,
+		Description:  sql.NullString{String: description, Valid: true},
+		CategoryName: sql.NullString{String: "Food", Valid: true},
+	}
+}
+
 func TestFormatSignedMoneyRoundsCarry(t *testing.T) {
 	got := formatSignedMoney(-9.999)
 	if got != "-$10.00" {

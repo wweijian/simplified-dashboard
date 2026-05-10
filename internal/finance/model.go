@@ -6,10 +6,9 @@ import (
 )
 
 const (
-	analyticsTransactionLimit = 8
-	recentTransactionLimit    = 10
-	topCategoryLimit          = 3
-	trendMonthCount           = 6
+	recentTransactionLimit = 10
+	topCategoryLimit       = 3
+	trendMonthCount        = 6
 )
 
 var currentMonth = func() time.Time {
@@ -111,7 +110,7 @@ func (model Model) loadAnalyticsSnapshot(summary MonthlySummary, topCategories [
 		return financeSnapshot{}, err
 	}
 
-	transactions, err := model.store.TransactionsForMonth(model.selectedMonth, category, analyticsTransactionLimit)
+	transactions, err := model.store.TransactionsForMonth(model.selectedMonth, category, 0)
 	if err != nil {
 		return financeSnapshot{}, err
 	}

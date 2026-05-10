@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"context"
+
 	calendar "simplified-dashboard/internal/calendar"
 	"simplified-dashboard/internal/db"
 	finance "simplified-dashboard/internal/finance"
@@ -34,7 +36,7 @@ type Model struct {
 	addHabitForm   addHabitForm
 	editingTaskID  int64
 	editingHabitID int64
-	calendar       Panel
+	calendar       calendar.Model
 	tasks          tasks.Model
 	finance        finance.Model
 	habits         habits.Model
@@ -46,14 +48,27 @@ func New(database *db.DB) Model {
 		mode:         ModeNormal,
 		addTaskForm:  newAddTaskForm(),
 		addHabitForm: newAddHabitForm(),
-		calendar:     calendar.New(),
+		calendar:     calendar.New().StartLoading(),
 		tasks:        tasks.New(tasks.NewStore(database)),
 		finance:      finance.New(finance.NewStore(database)),
 		habits:       habits.New(habits.NewStore(database)),
 	}
 }
 
-func (model Model) Init() bbt.Cmd { return nil }
+type calendarLoadedMsg struct {
+	result calendar.LoadResult
+}
+
+func (model Model) Init() bbt.Cmd {
+	return model.loadCalendarCmd()
+}
+
+func (model Model) loadCalendarCmd() bbt.Cmd {
+	calendarModel := model.calendar
+	return func() bbt.Msg {
+		return calendarLoadedMsg{result: calendarModel.LoadEvents(context.Background())}
+	}
+}
 
 func (model Model) View() string {
 	if model.width == 0 {

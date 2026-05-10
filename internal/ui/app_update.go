@@ -11,6 +11,8 @@ func (model Model) Update(msg bbt.Msg) (bbt.Model, bbt.Cmd) {
 	case bbt.WindowSizeMsg:
 		model.width = msg.Width
 		model.height = msg.Height
+	case calendarLoadedMsg:
+		model.calendar = model.calendar.ApplyLoadResult(msg.result)
 	case bbt.KeyMsg:
 		return model.updateKey(msg)
 	}
@@ -25,14 +27,21 @@ func (model Model) updateKey(msg bbt.KeyMsg) (Model, bbt.Cmd) {
 	if model.isHabitFormMode() {
 		return model.updateHabitFormMode(msg), nil
 	}
+	if handler, ok := keyBindings[key]; ok {
+		return handler(model)
+	}
+	if model.activePanel == int(Calendar) {
+		model.calendar = model.calendar.Update(key)
+		if key == "r" || key == "left" || key == "right" {
+			return model, model.loadCalendarCmd()
+		}
+		return model, nil
+	}
 	if key == "a" {
 		return model.openAddMode(), nil
 	}
 	if key == "e" {
 		return model.openEditMode(), nil
-	}
-	if handler, ok := keyBindings[key]; ok {
-		return handler(model)
 	}
 	return model.updateActivePanel(key), nil
 }
@@ -161,6 +170,9 @@ func (model Model) openHabitEditMode() Model {
 }
 
 func (model Model) updateActivePanel(key string) Model {
+	if model.activePanel == int(Calendar) {
+		model.calendar = model.calendar.Update(key)
+	}
 	if model.activePanel == int(Tasks) {
 		model.tasks = model.tasks.Update(key)
 	}

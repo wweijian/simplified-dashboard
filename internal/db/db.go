@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"simplified-dashboard/internal/appenv"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -14,17 +16,27 @@ type DB struct {
 }
 
 func Open() (*DB, error) {
-	homepath, err := os.UserHomeDir()
+	dbpath, err := PathFromEnv()
 	if err != nil {
-		return nil, fmt.Errorf("get home directory: %w", err)
+		return nil, err
 	}
+	return OpenPath(dbpath)
+}
 
-	dbdir := filepath.Join(homepath, ".dotfiles", "dashboard")
+func PathFromEnv() (string, error) {
+	path := os.Getenv("DASHBOARD_DB_PATH")
+	if path == "" {
+		return "", fmt.Errorf("DASHBOARD_DB_PATH is required")
+	}
+	return appenv.ExpandPath(path), nil
+}
+
+func OpenPath(dbpath string) (*DB, error) {
+	dbpath = appenv.ExpandPath(dbpath)
+	dbdir := filepath.Dir(dbpath)
 	if err := os.MkdirAll(dbdir, 0755); err != nil {
 		return nil, fmt.Errorf("create database directory: %w", err)
 	}
-
-	dbpath := filepath.Join(dbdir, "database.db")
 
 	db, err := sql.Open("sqlite", dbpath)
 	if err != nil {
